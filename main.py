@@ -6,6 +6,7 @@ import pyautogui
 import pydirectinput
 
 from bomb.scenes import Scene
+from bomb.window import set_top_most
 from logger.log_level import Level
 from logger.logs import log, set_level
 from vision.identifier import identify_scene
@@ -14,11 +15,11 @@ from vision.load_regions import regions
 from vision.locator import locate, locate_click
 
 # ----------
+focus_seconds = 15
 refresh_minutes = 2
 play_hours = 2
 set_level(Level.INFO)
 click_sleep = 0.3
-
 # ----------
 
 
@@ -30,30 +31,20 @@ start = datetime.now()
 focus = None
 
 start_play = {
-    "chrome": None,
     "edge": None,
     "brave": None,
     "firefox": None,
+    "chrome": None,
 }
 
 refresh_game = {
-    "chrome": None,
     "edge": None,
     "brave": None,
     "firefox": None,
+    "chrome": None,
 }
 
 current_browser = "edge"
-
-
-# Falta implementar:
-# - Troca de Navegadores
-
-# Trocar navegador:
-# - Cada navegador terá seu tempo de jogo
-# - Cada nevagador terá seu tempo de foco
-# - Dentro da tela "Playing" ficará com foco por X segundos (30)
-# - Após isso irá trocar para o próximo navegador
 
 
 def try_click(*images, region=regions()):
@@ -113,13 +104,24 @@ def change_browser():
 def check_focus():
     global focus
     global current_browser
+    global focus_seconds
 
     now = datetime.now()
     focus_time = now - focus
 
-    if focus_time.total_seconds() > 30:
+    if focus_time.total_seconds() > focus_seconds:
         focus = None
-        log(f"Ficamos 30 segundos no navegador {current_browser}, alterando...")
+        log(
+            f"Ficamos {focus_seconds} segundos no navegador {current_browser}, alterando..."
+        )
+        pydirectinput.moveTo(800, 600)
+        pyautogui.dragRel(0, -20, duration=1)
+        time.sleep(0.3)
+
+        pydirectinput.moveTo(800, 600)
+        time.sleep(0.3)
+        pyautogui.dragRel(0, -20, duration=1)
+
         change_browser()
     else:
         log(
@@ -133,6 +135,9 @@ def scene_timeout(scene, seconds=10):
     global old_scene
 
     if old_scene != scene:
+        start = datetime.now()
+
+    if not start:
         start = datetime.now()
 
     now = datetime.now()
@@ -168,6 +173,7 @@ def on_login():
     if not try_click("connect"):
         return
 
+    time.sleep(3)
     return Scene.WALLET
 
 
@@ -178,19 +184,33 @@ def on_wallet():
     if not try_click("metamask", "metamask1"):
         return
 
+    time.sleep(3)
     return Scene.METAMASK
 
 
 def on_metamask():
-    time.sleep(2)
 
-    if scene_timeout(Scene.METAMASK):
+    if scene_timeout(Scene.METAMASK, 60):
         return
 
     if not try_click("assinar", region=regions("full")):
         return
 
-    return Scene.LOADING
+    tries = 0
+    while locate_click(get_image("metamask_taskbar"), region=regions("taskbar")):
+        tries += 1
+
+        if tries >= 5:
+            break
+
+        for _ in range(5):
+            locate_click(get_image("assinar"), region=regions("full"))
+            time.sleep(1)
+
+        time.sleep(1)
+
+    time.sleep(1)
+    return None
 
 
 def on_loading():
@@ -202,6 +222,8 @@ def on_main_menu(next_scene):
     if scene_timeout(Scene.MAIN, 15):
         return
 
+    time.sleep(1)
+
     if next_scene == None:
         next_scene = Scene.HEROES
 
@@ -212,12 +234,21 @@ def on_main_menu(next_scene):
         if not try_click("play"):
             return
 
+    time.sleep(1)
     return next_scene
 
 
 def on_hero():
+    global start_play
+    global current_browser
+
     if scene_timeout(Scene.HEROES, 60 * 5):
         return
+
+    if start_play[current_browser] is not None:
+        finish = start_play[current_browser] + timedelta(hours=play_hours)
+        if datetime.now() < finish:
+            return
 
     for _ in range(5):
         pydirectinput.moveTo(800, 600)
@@ -261,6 +292,7 @@ def on_play():
     # Refresh Heroes
     if datetime.now() >= need_refresh:
         log(f"Hora de recarregar posições no navegador {current_browser}")
+        refresh_game[current_browser] = None
 
         if not try_click("back"):
             return
@@ -270,6 +302,7 @@ def on_play():
     # Finish Game
     if datetime.now() >= finish:
         log(f"Terminou de jogar no {current_browser}")
+        start_play[current_browser] = None
 
         if not try_click("back"):
             return
@@ -311,6 +344,8 @@ def on_wait(wait_scene):
 
 
 if __name__ == "__main__":
+    wallet_tries = 0
+    set_top_most()
     while True:
         # Check current scene
         scene = identify_scene()
@@ -319,11 +354,7 @@ if __name__ == "__main__":
         if wait_scene:
             on_wait(wait_scene)
 
-        if scene == Scene.LOGIN:
-            wait_scene = on_login()
-            time.sleep(click_sleep)
-
-        elif scene == Scene.WALLET:
+        if scene == Scene.WALLET:
             wait_scene = on_wallet()
             time.sleep(click_sleep)
 
@@ -331,15 +362,27 @@ if __name__ == "__main__":
             wait_scene = on_metamask()
             time.sleep(click_sleep)
 
+        elif scene == Scene.LOGIN:
+
+            if old_scene == Scene.WALLET:
+                wallet_tries += 1
+                log("Aguardando aparecer o MetaMask")
+                if wallet_tries >= 3:
+                    wallet_tries = 0
+                else:
+                    continue
+
+            wait_scene = on_login()
+            time.sleep(click_sleep)
+
         elif scene == Scene.LOADING:
             wait_scene = on_loading()
-            next_scene = Scene.HEROES
+            if next_scene is None:
+                next_scene = Scene.HEROES
             time.sleep(click_sleep)
 
         elif scene == Scene.MAIN:
             wait_scene = on_main_menu(next_scene)
-            if not next_scene == Scene.PLAYING:
-                start_play[current_browser] = None
             time.sleep(click_sleep)
 
         elif scene == Scene.HEROES:
@@ -361,3 +404,20 @@ if __name__ == "__main__":
 
         old_scene = scene
         time.sleep(2)
+
+
+# Possíveis erros:
+#
+# - Se não tiver logando:
+# --> Verificar o botão do MetaMask (cinza)
+# --> Verificar se o MetaMask está lá na taskbar
+#
+# Se botão for cinza então recarregar a página
+# Se existir na taskbar, maximiza, fecha e recarrega apágina
+#
+
+# Alterações:
+#
+# - Não mudar o tempo de jogo caso dê erro
+# - O tempo deve continuar até o jogo acabar por completo (2h)
+#

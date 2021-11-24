@@ -11,6 +11,7 @@ def load_images():
         "metamask1": cv2.imread("images/metamask1.png"),
         "assinar": cv2.imread("images/assinar.png"),
         "assinar1": cv2.imread("images/assinar1.png"),
+        "metamask_taskbar": cv2.imread("images/metamask_taskbar.png"),
         # Navegadores
         "brave": cv2.imread("images/brave.png"),
         "chrome": cv2.imread("images/chrome.png"),

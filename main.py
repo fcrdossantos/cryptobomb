@@ -13,8 +13,14 @@ from vision.load_images import get_image
 from vision.load_regions import regions
 from vision.locator import locate, locate_click
 
+# ----------
+refresh_minutes = 2
+play_hours = 2
 set_level(Level.INFO)
 click_sleep = 0.3
+
+# ----------
+
 
 old_scene = Scene.NOT_FOUND
 wait_scene = None
@@ -113,7 +119,7 @@ def check_focus():
 
     if focus_time.total_seconds() > 30:
         focus = None
-        log(f"Ficamos 30 segundos no navegador {current_browser}")
+        log(f"Ficamos 30 segundos no navegador {current_browser}, alterando...")
         change_browser()
     else:
         log(
@@ -235,6 +241,8 @@ def on_play():
     global current_browser
     global next_scene
     global focus
+    global refresh_minutes
+    global play_hours
 
     if not focus:
         focus = datetime.now()
@@ -247,12 +255,12 @@ def on_play():
     if not refresh_game[current_browser]:
         refresh_game[current_browser] = datetime.now()
 
-    need_refresh = refresh_game[current_browser] + timedelta(minutes=15)
-    finish = start_play[current_browser] + timedelta(hours=2)
+    need_refresh = refresh_game[current_browser] + timedelta(minutes=refresh_minutes)
+    finish = start_play[current_browser] + timedelta(hours=play_hours)
 
     # Refresh Heroes
     if datetime.now() >= need_refresh:
-        log(f"Terminou de jogar no {current_browser}")
+        log(f"Hora de recarregar posições no navegador {current_browser}")
 
         if not try_click("back"):
             return
@@ -280,7 +288,7 @@ def on_new_map():
 
 
 def on_error():
-    log("Mensagem de erro encontrada, recarregando")
+    log("Mensagem de erro encontrada, recarregando a página")
     refresh()
 
 
@@ -291,7 +299,7 @@ def on_wait(wait_scene):
     while scene != wait_scene:
         log("Tela Atual:", scene.value, level=Level.INFO)
         log("Aguardando a Tela:", wait_scene, level=Level.INFO)
-        log(f"- Tentativa: {tries}/5")
+        log(f"- Tentativa: {tries}/5", level=Level.INFO)
 
         if tries >= 5:
             wait_scene = scene

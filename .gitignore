@@ -4,7 +4,7 @@
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
-__pycache__/
+__pycache__/*
 *.py[cod]
 *$py.class
 
@@ -143,3 +143,7 @@ dmypy.json
 cython_debug/
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+vision/__pycache__/*
+
+#Debugs
+errors/*
